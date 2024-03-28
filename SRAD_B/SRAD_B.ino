@@ -7,13 +7,9 @@
 
 
 #include <SPI.h>
-#include <RP2040_SD.h>
+#include <SD.h>
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_BMP085.h>
-
-
-String datos, paquete;
-File documento;
 
 
 // GY-87
@@ -37,24 +33,34 @@ double a = 0, b = 0, c = 0, segundos = 0, totalat = 0, totalong = 0 ;
 int grados = 0, minutos = 0;
  
 
-//Reyax
+// Reyax
+String datos, paquete;
 SerialPIO reyax(8, 9);
 
+
+// SD
+File documento;
+
+const int _MISO = 12;
+const int _MOSI = 15;
+const int _CS = 13;
+const int _SCK = 14; 
 
 
 void setup() 
 {
-
   Serial.begin(115200);
 
-  Serial.println("Inicializando la memoria SD");
-
-  while(!SD.begin(13))
+  // SD
+  SD.begin(_CS, SPI1);
+  SPI1.setRX(_MISO);
+  SPI1.setTX(_MOSI);
+  SPI1.setSCK(_SCK);
+  while(!SD.begin(13, SPI1))
   {
     Serial.println("La inicializacion ha fallado");
   } 
-
-  Serial.println("Inicializacion exitosa");
+  Serial.println("Inicializacion exitosa"); 
 
   // Reyax
   reyax.begin(115200);
@@ -185,11 +191,11 @@ void mostrarDatos()
     mpu_read();
     bmp_read();
     
-
-    String paquete = "AT+SEND=5," + String(datos.length()) + "," + datos + "\r\n";
+    
+    String paquete = "AT+SEND=3," + String(datos.length()) + "," + datos + "\r\n";
     sendReyax(paquete);
 
-    documento = SD.open("SRAD_B.txt",FILE_WRITE);
+    documento = SD.open("SRAD_B.txt", FILE_WRITE);
 
     Serial.println(datos);
     documento.print(datos);

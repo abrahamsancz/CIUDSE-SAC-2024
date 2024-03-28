@@ -1,78 +1,281 @@
-#include <Wire.h>
-#include <MPU6050_tockn.h>
-#include <Adafruit_BMP280.h>
-#include <TinyGPS++.h>
-#include <SoftwareSerial.h>
+/*
+  CIUDSE 
+  Spaceport America Cup 2024
+  SRAD B
+  Lat, Long, No.Sat, | Acce (m/s^2): X, Y, Z, | Gyro (rad/s): X, Y, Z, | Incl (°): X, Y, | Temp (°C), Altit (m), SeaLPress (Pa), RealAltit (m)
+*/
 
-// Definir los pines para el GPS
-#define RXPin 7
-#define TXPin 8
-#define GPSBaud 9600
 
-// Inicializar el MPU6050
-MPU6050 mpu6050(Wire1);
+#include <SPI.h>
+#include <SD.h>
+#include <Adafruit_MPU6050.h>
+#include <Adafruit_BMP085.h>
 
-// Inicializar el BMP280
-Adafruit_BMP280 bmp280;
 
-// Inicializar el GPS
-SoftwareSerial ss(RXPin, TXPin);
-TinyGPSPlus gps;
+// GY-87
+Adafruit_MPU6050 mpu;
+Adafruit_BMP085 bmp;
+Adafruit_Sensor *mpu_temp, *mpu_accel, *mpu_gyro;
 
-void setup() {
-  Serial.begin(9600);
-  Serial2.begin(9600);
-  // Iniciar el MPU6050
-  Wire1.begin();
-  mpu6050.begin();
-  mpu6050.calcGyroOffsets(true);
+sensors_event_t accel;
+sensors_event_t gyro;
+sensors_event_t temp;
 
-  // Iniciar el BMP280
-  Wire.begin();
-  if (!bmp280.begin()) {
-    Serial.println("Could not find a valid BMP280 sensor, check wiring!");
-    while (1);
+float altura_real = 0, altura_inicial = 0;
+
+
+// GPS
+#define gpsSerial Serial1
+
+const int tamano_sentencia = 120;
+char sentencia[tamano_sentencia];
+double a = 0, b = 0, c = 0, segundos = 0, totalat = 0, totalong = 0 ;
+int grados = 0, minutos = 0;
+ 
+
+// Reyax
+String datos, paquete;
+SerialPIO reyax(8, 9);
+
+
+// SD
+File documento;
+
+const int _MISO = 12;
+const int _MOSI = 15;
+const int _CS = 13;
+const int _SCK = 14; 
+
+
+// Airbrakes
+servo = 29; 
+
+
+// E-matches
+ematchMain = 27;
+ematchDrogue = 28;
+
+
+// Buzzer
+buzzer = 26;
+
+
+void setup() 
+{
+  Serial.begin(115200);
+
+  // Airbrakes
+  pinMode(servo, OUTPUT);
+
+  // E-matches
+  pinMode(ematchMain, OUTPUT);
+  pinMode(ematchDrogue, OUTPUT);
+
+  // Buzzer
+  pinMode(buzzer, OUTPUT);
+
+  // SD
+  SD.begin(_CS, SPI1);
+  SPI1.setRX(_MISO);
+  SPI1.setTX(_MOSI);
+  SPI1.setSCK(_SCK);
+  while(!SD.begin(13, SPI1))
+  {
+    Serial.println("La inicializacion ha fallado");
+  } 
+  Serial.println("Inicializacion exitosa"); 
+
+  // Reyax
+  reyax.begin(115200);
+  sendReyax("AT+MODE=0\r\n");
+
+  // GY-87
+  mpu.begin();
+  mpu.setI2CBypass(true);
+  bmp.begin();
+  mpu_temp = mpu.getTemperatureSensor();
+  mpu_accel = mpu.getAccelerometerSensor();
+  mpu_gyro = mpu.getGyroSensor();
+  altura_inicial = bmp.readAltitude();
+
+  // GPS
+  gpsSerial.setRX(1);
+  gpsSerial.setTX(0);
+  gpsSerial.begin(9600);
+}
+
+void loop() 
+{
+  static int i = 0;
+  if (gpsSerial.available()) 
+  {
+    char dato = gpsSerial.read();
+    if (dato != '\n' && i < tamano_sentencia) 
+    {
+      sentencia[i] = dato;
+      i++;
+    } 
+    else 
+    {
+      sentencia[i] = '\0';
+      i = 0;
+      mostrarDatos();
+    }
+  } 
+}
+
+
+
+void mpu_read() 
+{
+  mpu_temp->getEvent(&temp);
+  mpu_accel->getEvent(&accel);
+  mpu_gyro->getEvent(&gyro);
+
+  float accel_ang_x = atan(accel.acceleration.x / sqrt(pow(accel.acceleration.y, 2) + pow(accel.acceleration.z, 2))) * (180.0 / 3.14);
+  float accel_ang_y = atan(accel.acceleration.y / sqrt(pow(accel.acceleration.x, 2) + pow(accel.acceleration.z, 2))) * (180.0 / 3.14);
+
+  // acceleration is measured in m/s^2
+  datos += ";";
+  datos += accel.acceleration.x;
+  datos += ";";
+  datos += accel.acceleration.y;
+  datos += ";";
+  datos += accel.acceleration.z;
+  datos += ";";
+
+  // rotation is measured in grados/s
+  datos += gyro.gyro.x*57.296;
+  datos += ";";
+  datos += gyro.gyro.y*57.296;
+  datos += ";";
+  datos += gyro.gyro.z*57.296;
+  datos += ";";
+
+  // la inclinacion esta dada en grados
+  datos += accel_ang_x;
+  datos += ";";
+  datos += accel_ang_y;
+  datos += ";";
+}
+
+
+void bmp_read() 
+{
+  datos += bmp.readTemperature();
+  datos += ";";
+  datos += bmp.readAltitude(101592);
+  datos += ";";
+  datos += bmp.readSealevelPressure();
+  datos += ";";
+  altura_real = bmp.readAltitude() - altura_inicial;
+  datos += altura_real;
+}
+
+
+void mostrarDatos() 
+{
+  char campo[20], lat[10], lon[10];
+  obtener_campo(campo, 0);
+  dtostrf(totalat, 6, 6, lat);
+  dtostrf(totalong, 6, 6, lon);
+
+  if (strcmp(campo, "$GPGGA") == 0) 
+  {
+    // Lat
+    obtener_campo(campo, 2);
+    a = atof(campo) / 100;
+    grados = a;
+    b = a - grados;
+    minutos = (b / 60);
+    c = ((b * 60) - minutos) * 100;
+    segundos = c / 3600;
+    totalat = grados + minutos + segundos;
+    datos += lat;
+    datos += ";";
+
+    // Long
+    obtener_campo(campo, 4);
+    a = atof(campo) / 100;
+    grados = a;
+    b = a - grados;
+    minutos = (b / 60);
+    c = ((b * 60) - minutos) * 100;
+    segundos = c / 3600;
+    totalong = -(grados + minutos + segundos);
+    datos += lon;
+    datos += ";";
+
+    // No. Sat
+    obtener_campo(campo, 8);
+    datos += campo;
+
+
+    mpu_read();
+    bmp_read();
+
+
+    if(altura_real > 1)
+    {
+      Serial.print("Se activo el E-match Drogue");
+      digitalWrite(28, 1);
+    }
+
+    if(altura_real > 2)
+    {
+      Serial.print("Se activo el E-match Main");
+      digitalWrite(27, 1);
+    }
+    
+
+    String paquete = "AT+SEND=3," + String(datos.length()) + "," + datos + "\r\n";
+    sendReyax(paquete);
+
+    documento = SD.open("SRAD_A.txt", FILE_WRITE);
+
+    Serial.println(datos);
+    documento.print(datos);
+    datos = "\0";
+    
+    documento.close();
+  }
+}
+
+
+void obtener_campo(char* buffer, int indice) 
+{
+  int sentencia_pos = 0;
+  int posicion_campo = 0;
+  int contador_comas = 0;
+
+  while (sentencia_pos < tamano_sentencia) 
+  {
+    if (sentencia[sentencia_pos] == ',') 
+    {
+      contador_comas++;
+      sentencia_pos++;
+    }
+
+    if (contador_comas == indice) 
+    {
+      buffer[posicion_campo] = sentencia[sentencia_pos];
+      posicion_campo++;
+    }
+
+    sentencia_pos++;
   }
 
-  // Iniciar el GPS
-  ss.begin(GPSBaud);
+  buffer[posicion_campo] = '\0';
 }
 
-void loop() {
-  // Leer datos del MPU6050
-  mpu6050.update();
-  Serial.print("Angle X : ");
-  int AnX =mpu6050.getAngleX();
-  Serial.print(AnX);
-  Serial.print("\tAngle Y : ");
-  int AnY = mpu6050.getAngleY();
-  Serial.print(AnY);
-  Serial.print("\tAngle Z : ");
-  int AnZ =mpu6050.getAngleZ();
-  Serial.println(AnZ);
 
-  // Leer datos del BMP280
-  Serial.print("Temperature = ");
-  Serial.print(bmp280.readTemperature());
-  Serial.print(" *C\t");
-  Serial.print("Pressure = ");
-  Serial.print(bmp280.readPressure());
-  Serial.print(" Pa\t");
-  Serial.print("Approx altitude = ");
-  Serial.print(bmp280.readAltitude(1013.25)); // this should be adjusted to your local forcase
-  Serial.println(" m");
+void sendReyax(String paquete)
+{
+  reyax.print(paquete);
+  delay(100);
 
-  // Leer datos del GPS
- while (Serial2.available() > 0) {
-    gps.encode(Serial2.read());
-    if (gps.location.isUpdated()) {
-      Serial.print("Latitude= ");
-      Serial.print(gps.location.lat(), 6);
-      Serial.print(" Longitude= ");
-      Serial.println(gps.location.lng(), 6);
-    }
- }
-
-  delay(250);
+  while(reyax.available())
+  {
+    reyax.write(reyax.read());
+  }
 }
-
