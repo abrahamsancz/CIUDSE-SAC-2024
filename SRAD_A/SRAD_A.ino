@@ -10,6 +10,8 @@
 #include <SD.h>
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_BMP085.h>
+#include <Servo.h>
+#include "EasyBuzzer.h"
 
 
 // GY-87
@@ -48,16 +50,20 @@ const int _SCK = 14;
 
 
 // Airbrakes
-servo = 29; 
+int airb = 29; 
+Servo servo;
 
 
 // E-matches
-ematchMain = 27;
-ematchDrogue = 28;
+int ematchMain = 27;
+int ematchDrogue = 28;
 
 
 // Buzzer
-buzzer = 26;
+int buzzer = 26;
+int frequency = 1000;
+int beeps = 3;
+
 
 
 void setup() 
@@ -65,14 +71,15 @@ void setup()
   Serial.begin(115200);
 
   // Airbrakes
-  pinMode(servo, OUTPUT);
+  servo.attach(airb);
 
   // E-matches
   pinMode(ematchMain, OUTPUT);
   pinMode(ematchDrogue, OUTPUT);
 
   // Buzzer
-  pinMode(buzzer, OUTPUT);
+  EasyBuzzer.setPin(buzzer);
+  EasyBuzzer.beep(frequency, beeps);
 
   // SD
   SD.begin(_CS, SPI1);
@@ -104,6 +111,7 @@ void setup()
   gpsSerial.begin(9600);
 }
 
+
 void loop() 
 {
   static int i = 0;
@@ -119,6 +127,7 @@ void loop()
     {
       sentencia[i] = '\0';
       i = 0;
+      EasyBuzzer.update();
       mostrarDatos();
     }
   } 
@@ -211,10 +220,11 @@ void mostrarDatos()
     datos += campo;
 
 
+    // GY-87
     mpu_read();
     bmp_read();
 
-
+    // E-matches
     if(altura_real > 1)
     {
       Serial.print("Se activo el E-match Drogue");
@@ -225,6 +235,15 @@ void mostrarDatos()
     {
       Serial.print("Se activo el E-match Main");
       digitalWrite(27, 1);
+    }
+
+    // Airbrakes
+    int pos;
+
+    for (pos = 0; pos <= 180; pos += 1) 
+    { 
+      servo.write(pos);          
+      delay(15);                       
     }
     
 
