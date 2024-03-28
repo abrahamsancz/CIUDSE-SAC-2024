@@ -1,7 +1,7 @@
 /*
   CIUDSE 
   Spaceport America Cup 2024
-  SRAD B
+  SRAD B prueba
   Lat, Long, No.Sat, | Acce (m/s^2): X, Y, Z, | Gyro (rad/s): X, Y, Z, | Incl (°): X, Y, | Temp (°C), Altit (m), SeaLPress (Pa), RealAltit (m)
 */
 
