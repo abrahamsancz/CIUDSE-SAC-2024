@@ -10,6 +10,7 @@
 #include <SD.h>
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_BMP085.h>
+#include "EasyBuzzer.h"
 
 
 // GY-87
@@ -47,9 +48,20 @@ const int _CS = 13;
 const int _SCK = 14; 
 
 
+// Buzzer
+int buzzer = 26;
+int frequency = 1000;
+int beeps = 3;
+
+
+
 void setup() 
 {
   Serial.begin(115200);
+
+  // Buzzer
+  EasyBuzzer.setPin(buzzer);
+  EasyBuzzer.beep(frequency, beeps);
 
   // SD
   SD.begin(_CS, SPI1);
@@ -96,6 +108,7 @@ void loop()
     {
       sentencia[i] = '\0';
       i = 0;
+      EasyBuzzer.update();
       mostrarDatos();
     }
   } 
@@ -190,7 +203,7 @@ void mostrarDatos()
 
     mpu_read();
     bmp_read();
-    
+
     
     String paquete = "AT+SEND=3," + String(datos.length()) + "," + datos + "\r\n";
     sendReyax(paquete);
