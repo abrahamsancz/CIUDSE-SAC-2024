@@ -1,13 +1,12 @@
 /*
   CIUDSE 
   Spaceport America Cup 2024
-  SRAD B
+  SRAD A
   Lat, Long, No.Sat, | Acce (m/s^2): X, Y, Z, | Gyro (rad/s): X, Y, Z, | Incl (°): X, Y, | Temp (°C), Altit (m), SeaLPress (Pa), RealAltit (m)
 */
 
 
 #include <SPI.h>
-#include <SD.h>
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_BMP085.h>
 #include <Servo.h>
@@ -38,15 +37,6 @@ int grados = 0, minutos = 0;
 // Reyax
 String datos, paquete;
 SerialPIO reyax(8, 9);
-
-
-// SD
-File documento;
-
-const int _MISO = 12;
-const int _MOSI = 15;
-const int _CS = 13;
-const int _SCK = 14; 
 
 
 // Airbrakes
@@ -80,17 +70,6 @@ void setup()
   // Buzzer
   EasyBuzzer.setPin(buzzer);
   EasyBuzzer.beep(frequency, beeps);
-
-  // SD
-  SD.begin(_CS, SPI1);
-  SPI1.setRX(_MISO);
-  SPI1.setTX(_MOSI);
-  SPI1.setSCK(_SCK);
-  while(!SD.begin(13, SPI1))
-  {
-    Serial.println("La inicializacion ha fallado");
-  } 
-  Serial.println("Inicializacion exitosa"); 
 
   // Reyax
   reyax.begin(115200);
@@ -250,13 +229,8 @@ void mostrarDatos()
     String paquete = "AT+SEND=3," + String(datos.length()) + "," + datos + "\r\n";
     sendReyax(paquete);
 
-    documento = SD.open("SRAD_A.txt", FILE_WRITE);
-
     Serial.println(datos);
-    documento.print(datos);
     datos = "\0";
-    
-    documento.close();
   }
 }
 
