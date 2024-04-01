@@ -9,8 +9,8 @@
 #include <SPI.h>
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_BMP085.h>
-#include <Servo.h>
 #include "EasyBuzzer.h"
+#include "RP2040_ISR_Servo.h"
 
 
 // GY-87
@@ -40,8 +40,44 @@ SerialPIO reyax(8, 9);
 
 
 // Airbrakes
-int airb = 29; 
-Servo servo;
+#if ( defined(ARDUINO_ARCH_RP2040) || defined(ARDUINO_RASPBERRY_PI_PICO) || defined(ARDUINO_ADAFRUIT_FEATHER_RP2040) || \
+      defined(ARDUINO_GENERIC_RP2040) ) && !defined(ARDUINO_ARCH_MBED)
+  #if !defined(RP2040_ISR_SERVO_USING_MBED)    
+    #define RP2040_ISR_SERVO_USING_MBED     false
+  #endif  
+
+#elif ( defined(ARDUINO_NANO_RP2040_CONNECT) || defined(ARDUINO_RASPBERRY_PI_PICO) || defined(ARDUINO_ADAFRUIT_FEATHER_RP2040) || \
+      defined(ARDUINO_GENERIC_RP2040) ) && defined(ARDUINO_ARCH_MBED)
+      
+  #if !defined(RP2040_ISR_SERVO_USING_MBED)    
+    #define RP2040_ISR_SERVO_USING_MBED     true
+  #endif  
+  
+#endif
+
+#define ISR_SERVO_DEBUG             4
+
+#define MIN_MICROS        800
+#define MAX_MICROS        2450
+
+#define SERVO_PIN_1       29
+
+typedef struct
+{
+  int     servoIndex;
+  uint8_t servoPin;
+} ISR_servo_t;
+
+
+#define NUM_SERVOS            1
+
+ISR_servo_t ISR_servo[NUM_SERVOS] =
+{
+  { -1, SERVO_PIN_1 }
+};
+
+bool bandera = false;
+int altura_maxima = -10;
 
 
 // E-matches
@@ -61,7 +97,16 @@ void setup()
   Serial.begin(115200);
 
   // Airbrakes
-  servo.attach(airb);
+  for (int index = 0; index < NUM_SERVOS; index++)
+  {
+    pinMode(ISR_servo[index].servoPin, OUTPUT);
+    digitalWrite(ISR_servo[index].servoPin, LOW);
+  }
+
+  for (int index = 0; index < NUM_SERVOS; index++)
+  {
+    ISR_servo[index].servoIndex = RP2040_ISR_Servos.setupServo(ISR_servo[index].servoPin, MIN_MICROS, MAX_MICROS);
+  }
 
   // E-matches
   pinMode(ematchMain, OUTPUT);
@@ -106,7 +151,7 @@ void loop()
     {
       sentencia[i] = '\0';
       i = 0;
-      EasyBuzzer.update();
+      //asyBuzzer.update();
       mostrarDatos();
     }
   } 
@@ -204,27 +249,53 @@ void mostrarDatos()
     bmp_read();
 
     // E-matches
-    if(altura_real > 1)
+    /*if(altura_real > 1)
     {
+      //delay(3000);
       Serial.print("Se activo el E-match Drogue");
       digitalWrite(28, 1);
-    }
+    }*/
 
-    if(altura_real > 2)
+    /* if(altura_real > 1)
     {
+      //delay(3000);
       Serial.print("Se activo el E-match Main");
-      digitalWrite(27, 1);
-    }
+      digitalWrite(ematchMain, 1);
+    } */
 
     // Airbrakes
-    int pos;
+    if(altura_real > 0.9 && altura_maxima < 1 && bandera == false)
+    {
+      int position; 
 
-    for (pos = 0; pos <= 180; pos += 1) 
-    { 
-      servo.write(pos);          
-      delay(15);                       
+      for (position = 0; position <= 130; position += 130)
+      {
+        for (int index = 0; index < NUM_SERVOS; index++)
+        {
+          RP2040_ISR_Servos.setPosition(ISR_servo[index].servoIndex, position);
+          bandera = true;
+        }
+      }
     }
-    
+
+
+    if(altura_real < altura_maxima && altura_real > 0.5 && bandera == true)
+    {
+      int position; 
+
+      for (position = 130; position >= 0; position -= 130)
+      {
+        for (int index = 0; index < NUM_SERVOS; index++)
+        {
+          RP2040_ISR_Servos.setPosition(ISR_servo[index].servoIndex, position);
+          bandera = false;
+        }
+      }
+    }
+
+    altura_maxima = altura_real;
+    datos += altura_maxima;
+
 
     String paquete = "AT+SEND=3," + String(datos.length()) + "," + datos + "\r\n";
     sendReyax(paquete);
