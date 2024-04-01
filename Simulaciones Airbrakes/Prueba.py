@@ -16,6 +16,7 @@ env.set_date(
 
 env.set_atmospheric_model(type='Forecast', file='GFS')
 
+# Motor
 Pro75M1670 = SolidMotor(
     thrust_source="Cesaroni_M1670.eng",
     dry_mass=1.815,
@@ -36,6 +37,7 @@ Pro75M1670 = SolidMotor(
     coordinate_system_orientation="nozzle_to_combustion_chamber",
 )
 
+# Cohete
 calisto = Rocket(
     radius=0.0635,
     mass=14.426,  # without motor
@@ -46,6 +48,7 @@ calisto = Rocket(
     coordinate_system_orientation="tail_to_nose",
 )
 
+# Rails
 buttons = calisto.set_rail_buttons(
     upper_button_position=0.0818,
     lower_button_position=-0.6182,
@@ -54,10 +57,12 @@ buttons = calisto.set_rail_buttons(
 
 calisto.add_motor(Pro75M1670, position=-1.255)
 
+# Ojiva
 nose = calisto.add_nose(
     length=0.55829, kind="vonKarman", position=1.278
 )
 
+# Aletas
 fins = calisto.add_trapezoidal_fins(
     n=4,
     root_chord=0.120,
@@ -72,6 +77,7 @@ tail = calisto.add_tail(
     top_radius=0.0635, bottom_radius=0.0435, length=0.060, position=-1.194656
 )
 
+# Paracaidas
 main = calisto.add_parachute(
     name="main",
     cd_s=10.0,
@@ -90,6 +96,7 @@ drogue = calisto.add_parachute(
     noise=(0, 8.3, 0.5),
 )
 
+# Airbrakes
 def controller_function(
     time, sampling_rate, state, state_history, observed_variables, air_brakes
 ):
@@ -166,9 +173,11 @@ test_flight = Flight(
     inclination=85,
     heading=0,
     time_overshoot=False,
-    terminate_on_apogee=True,
+    terminate_on_apogee=False,
 )
 
+# Informacion y graficas
 test_flight.all_info()
 
+# Archivo para google earth
 test_flight.export_kml(file_name="test_flight.kml")
