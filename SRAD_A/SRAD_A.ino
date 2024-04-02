@@ -268,7 +268,7 @@ void mostrarDatos()
     {
       int position; 
 
-      for (position = 0; position <= 130; position += 130)
+      for (position = 0; position <= 105; position += 105)
       {
         for (int index = 0; index < NUM_SERVOS; index++)
         {
@@ -283,7 +283,7 @@ void mostrarDatos()
     {
       int position; 
 
-      for (position = 130; position >= 0; position -= 130)
+      for (position = 105; position >= 0; position -= 105)
       {
         for (int index = 0; index < NUM_SERVOS; index++)
         {
