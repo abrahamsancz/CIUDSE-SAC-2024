@@ -297,7 +297,7 @@ void mostrarDatos()
     datos += altura_maxima;
 
 
-    String paquete = "AT+SEND=3," + String(datos.length()) + "," + datos + "\r\n";
+    String paquete = "AT+SEND=0," + String(datos.length()) + "," + datos + "\r\n";
     sendReyax(paquete);
 
     Serial.println(datos);
@@ -336,7 +336,7 @@ void obtener_campo(char* buffer, int indice)
 void sendReyax(String paquete)
 {
   reyax.print(paquete);
-  delay(100);
+  delay(50);
 
   while(reyax.available())
   {
