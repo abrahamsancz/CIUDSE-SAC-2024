@@ -1,0 +1,3 @@
+BAND 915
+ADDRESS (DIFERENTE) 1 emisor y 3 receptor
+NETW (IGUAL) 3
