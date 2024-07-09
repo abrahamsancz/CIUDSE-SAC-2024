@@ -1,16 +1,16 @@
 /*
   CIUDSE 
   Spaceport America Cup 2024
-  SRAD B 
+  SRAD B prueba
   Lat, Long, No.Sat, | Acce (m/s^2): X, Y, Z, | Gyro (rad/s): X, Y, Z, | Incl (°): X, Y, | Temp (°C), Altit (m), SeaLPress (Pa), RealAltit (m)
 */
 
 
-#include <SPI.h>
+#include <SoftwareSerial.h>
+#include <TinyGPS.h>
 #include <SD.h>
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_BMP085.h>
-#include "EasyBuzzer.h"
 
 
 // GY-87
@@ -26,13 +26,10 @@ float altura_real = 0, altura_inicial = 0;
 
 
 // GPS
-#define gpsSerial Serial1
+TinyGPS gps;
+SoftwareSerial ss(1, 0);
+float flat, flon;
 
-const int tamano_sentencia = 120;
-char sentencia[tamano_sentencia];
-double a = 0, b = 0, c = 0, segundos = 0, totalat = 0, totalong = 0 ;
-int grados = 0, minutos = 0;
- 
 
 // Reyax
 String datos, paquete;
@@ -50,7 +47,8 @@ const int _SCK = 14;
 
 // Buzzer
 int buzzer = 26;
-int frequency = 1000;
+int frequency = 500;
+float bandbuzz = false;
 
 
 
@@ -81,32 +79,28 @@ void setup()
   altura_inicial = bmp.readAltitude();
 
   // GPS
-  gpsSerial.setRX(1);
-  gpsSerial.setTX(0);
-  gpsSerial.begin(9600);
+  ss.begin(9600);
 }
 
 void loop() 
 {
-  static int i = 0;
-  if (gpsSerial.available()) 
-  {
-    char dato = gpsSerial.read();
-    if (dato != '\n' && i < tamano_sentencia) 
-    {
-      sentencia[i] = dato;
-      i++;
-    } 
-    else 
-    {
-      sentencia[i] = '\0';
-      i = 0;
-      //EasyBuzzer.update();
-      mostrarDatos();
-    }
-  } 
-}
+  gpss();
+  mpu_read();
+  bmp_read();
+  Buzzzer();
 
+  String paquete = "AT+SEND=0," + String(datos.length()) + "," + datos + "\r\n";
+  sendReyax(paquete);
+
+  documento = SD.open("SRAD_B.txt", FILE_WRITE);
+
+  Serial.println(datos);
+  documento.print(datos);
+  documento.print("\n");
+  datos = "\0";
+
+  documento.close(); 
+}
 
 
 void mpu_read() 
@@ -156,94 +150,54 @@ void bmp_read()
 }
 
 
-void mostrarDatos() 
+void gpss()
 {
-  char campo[20], lat[10], lon[10];
-  obtener_campo(campo, 0);
-  dtostrf(totalat, 6, 6, lat);
-  dtostrf(totalong, 6, 6, lon);
-
-  if (strcmp(campo, "$GPGGA") == 0) 
+  for (unsigned long start = millis(); millis() - start < 100;) // delay de datos
   {
-    // Lat
-    obtener_campo(campo, 2);
-    a = atof(campo) / 100;
-    grados = a;
-    b = a - grados;
-    minutos = (b / 60);
-    c = ((b * 60) - minutos) * 100;
-    segundos = c / 3600;
-    totalat = grados + minutos + segundos;
-    datos += lat;
-    datos += ";";
-
-    // Long
-    obtener_campo(campo, 4);
-    a = atof(campo) / 100;
-    grados = a;
-    b = a - grados;
-    minutos = (b / 60);
-    c = ((b * 60) - minutos) * 100;
-    segundos = c / 3600;
-    totalong = -(grados + minutos + segundos);
-    datos += lon;
-    datos += ";";
-
-    // No. Sat
-    obtener_campo(campo, 8);
-    datos += campo;
-
-
-    mpu_read();
-    bmp_read();
-
-    
-    String paquete = "AT+SEND=0," + String(datos.length()) + "," + datos + "\r\n";
-    sendReyax(paquete);
-
-    documento = SD.open("SRAD_B.txt", FILE_WRITE);
-
-    Serial.println(datos);
-    documento.print(datos);
-    documento.print("\n");
-    datos = "\0";
-    
-    documento.close();
+    while (ss.available())
+    {
+      char c = ss.read();
+      gps.encode(c);
+    } 
   }
+
+  unsigned long age;
+  gps.f_get_position(&flat, &flon, &age);
+  datos += ",";
+  datos += String(flat, 6);
+  datos += ";";
+  datos += String(flon, 6);
+  datos += ";";
+  datos += gps.satellites() == TinyGPS::GPS_INVALID_SATELLITES ? 0 : gps.satellites();
 }
 
 
-void obtener_campo(char* buffer, int indice) 
+void Buzzzer()
 {
-  int sentencia_pos = 0;
-  int posicion_campo = 0;
-  int contador_comas = 0;
-
-  while (sentencia_pos < tamano_sentencia) 
+  if(flat < 100 && flon < 1 && bandbuzz == false)
   {
-    if (sentencia[sentencia_pos] == ',') 
+    for (int i = 0; i < 3; i++) 
     {
-      contador_comas++;
-      sentencia_pos++;
+      tone(buzzer, frequency); 
+      delay(50    -0);             
+      noTone(buzzer);      
+      delay(500);             
     }
 
-    if (contador_comas == indice) 
-    {
-      buffer[posicion_campo] = sentencia[sentencia_pos];
-      posicion_campo++;
-    }
-
-    sentencia_pos++;
+    bandbuzz = true;
   }
-
-  buffer[posicion_campo] = '\0';
+  else if(bandbuzz == false)
+  {
+    tone(buzzer, frequency);
+    delay(100);
+  }
 }
 
 
 void sendReyax(String paquete)
 {
   reyax.print(paquete);
-  delay(50);
+  delay(150); // 100 ms para la SRAD A y 150 ms para la SRAD B
 
   while(reyax.available())
   {
