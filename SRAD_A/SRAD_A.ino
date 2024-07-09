@@ -224,6 +224,7 @@ void mostrarDatos()
     c = ((b * 60) - minutos) * 100;
     segundos = c / 3600;
     totalat = grados + minutos + segundos;
+    datos += ",";
     datos += lat;
     datos += ";";
 
@@ -253,8 +254,8 @@ void mostrarDatos()
     {
       //delay(3000);
       Serial.print("Se activo el E-match Drogue");
-      digitalWrite(28, 1);
-    }*/
+      digitalWrite(ematchDrogue, 1);
+    } */
 
     /* if(altura_real > 1)
     {
@@ -264,7 +265,7 @@ void mostrarDatos()
     } */
 
     // Airbrakes
-    if(altura_real > 0.9 && altura_maxima < 1 && bandera == false)
+    /*if(altura_real > 0.9 && altura_maxima < 1 && bandera == false)
     {
       int position; 
 
@@ -291,7 +292,7 @@ void mostrarDatos()
           bandera = false;
         }
       }
-    }
+    } */
 
     altura_maxima = altura_real;
     datos += altura_maxima;
